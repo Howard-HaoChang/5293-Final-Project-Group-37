@@ -10,6 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(ggplot2)
 library(tidyverse)
 library(maps)
+library(readxl)
 ```
 
 
@@ -24,5 +25,15 @@ ggplot(world_map, aes(x = long, y = lat, group = group))+
   geom_polygon()+
   theme_classic()
 ```
+
+## read data
+```{r}
+disaster = read_excel('../data/emdat_public_2022_03_19_query_uid-LV4CQy.xlsx', sheet = 1)
+
+disastersum = disaster %>%
+  group_by(Country, Year) %>%
+  summarize(totaldeath = sum(Total.Deaths))
+```
+
 
 
