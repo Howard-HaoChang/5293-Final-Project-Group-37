@@ -1,0 +1,28 @@
+---
+title: "Contribution"
+author: "Hao Chang"
+date: "2022/3/19"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(tidyverse)
+library(maps)
+```
+
+
+## Read map data
+```{r}
+world_map = map_data('world')
+```
+
+## plot a basic world map
+```{r}
+ggplot(world_map, aes(x = long, y = lat, group = group))+
+  geom_polygon()+
+  theme_classic()
+```
+
+
