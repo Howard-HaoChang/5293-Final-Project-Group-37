@@ -2,5 +2,5 @@
 
 Teammember:
 + Jiachen Liu (jl5991)
-+ Hao Chang (
++ Hao Chang (hc3207)
 + Yihui Xie (yx2714)
