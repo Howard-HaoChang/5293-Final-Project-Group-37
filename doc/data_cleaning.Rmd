@@ -1,0 +1,130 @@
+---
+title: "Untitled"
+author: "Yihui Xie"
+date: "3/2/2022"
+output: html_document
+---
+```{r}
+library(maps)
+library(ggplot2)
+library(countrycode)
+library(dplyr)
+library(do)
+```
+
+```{r}
+countryname("USA")
+```
+
+```{r}
+getwd()
+#读取数据，作图数据
+datamap <- readxl::read_xlsx("emdat_public_2022_03_19_query_uid-LV4CQy.xlsx")
+#读取经纬度数据
+data_temp <- map_data("world")
+```
+
+第一遍尝试，发现countryname收录数据，我们通过修改将这些名称跳过countryname function直接进行匹配。
+Warning: Problem with `mutate()` column `countrycode`.
+ℹ `countrycode = countryname(datap_temp$Country)`.
+ℹ Some values were not matched unambiguously: Azores Islands, Canary Is, Serbia Montenegro, Yemen P Dem Rep
+
+Warning: Problem with `mutate()` column `countrycode`.
+ℹ `countrycode = countryname(data_temp$region)`.
+ℹ Some values were not matched unambiguously: Ascension Island, Azores, Barbuda, Canary Islands, Chagos Archipelago, Grenadines, Heard Island, Madeira Islands, Micronesia, Saba, Saint Martin, Siachen Glacier, Sint Eustatius, Virgin Islands
+
+第一次匹配，作图数据中存在一些地区名称而非国家名称，需要二次修改，统一成国家
+#统一国家
+"British Virgin Islands"英属维京群岛 英国
+"U.S. Virgin Islands"美属维京群岛 美国
+"Hong Kong"香港是中国的一部分                       
+"Macao"澳门是中国的一部分
+"Taiwan"台湾是中国的一部分，China(Taiwan) 最后match之前进行修改
+"Netherlands Antilles"荷属安蒂列斯 荷兰加勒比地区 Caribbean Netherlands
+"Saint Martin (French part)" 法属圣马丁群岛
+"Tokelau"托克劳 新西兰的附属领土 新西兰
+"Yemen Arab Republic"阿拉伯也门共和国（1962-1990），又称北也门，现已合并为也门共和国 Yemen
+
+#删除
+"Micronesia (Federated States of)" 密克罗尼西亚联邦 地图里没有 删掉
+"Tuvalu"图瓦卢 地图里没有 删掉
+
+#解体待定（原始数据处理）
+"Czechoslovakia"捷克斯洛伐克 解体
+保留含有显著死亡人数的数据(两条)，在location中显示为Slovakia地区，故将国家名称变更为“Slovakia”
+"Yugoslavia"南斯拉夫 解体 1963(Earthquake)/1979(Flood)划分成6份命名为现在南斯拉夫解体后的六个国家。
+保留含有显著死亡人数的数据(两条)，在location中有显示各自地区，故将国家名称与地区匹配即可。
+“Serbia Montenegro”塞尔维亚和黑山国家联盟 解体
+在location中有显示各自地区，故将国家名称与地区匹配即可。(2005-7-14地区同时包含了两个国家，但因死亡人数过少，仅三人。故删除)
+
+```{r}
+sort(unique(datamap_temp$Country))
+
+unique(datamap_temp$Country)[which(!(unique(datamap_temp$Country) %in%unique(datamap_remove$Country)))]
+```
+
+
+```{r}
+##作图数据处理
+#备份数据，读取太费劲了
+datamap_temp <- datamap
+#删除"Micronesia (Federated States of)" 密克罗尼西亚联邦和"Tuvalu"图瓦卢
+datamap_remove <- datamap_temp[-which(datamap_temp$Country %in% c("Micronesia (Federated States of)","Tuvalu")),]
+#替换无法读取的国家名称(修改1)
+#Azores Islands在function countryname中没有结果，故直接替换成和经纬度数据一样的国家名称 Azores 即可
+datamap_remove$Country[datamap_remove$Country == "Azores Islands"] <- "Azores"
+#Canary Is同理，替换成 Canary Islands 即可
+datamap_remove$Country[datamap_remove$Country == "Canary Is"] <- "Canary Islands"
+#因为时间原因，过去的Yemen是两个国家，Yemen P Dem Rep和Yemen Arab Rep。不过在1990之后合并成了一个国家Yemen。经纬数据并没有之前细化的地图划分，所以直接合并替换成Yemen
+datamap_remove$Country[datamap_remove$Country %in% c("Yemen P Dem Rep","Yemen Arab Rep")] <- "Yemen"
+#Virgin Island (British)英属维京群岛，经纬图并没有单独划分，故直接算成英国
+datamap_remove$Country[datamap_remove$Country == "Virgin Island (British)"] <- "UK"
+#Virgin Island (U.S.)美属维京群岛，经纬图并没有单独划分，故直接算成美国
+datamap_remove$Country[datamap_remove$Country == "Virgin Island (U.S.)"] <- "US"
+#当时的香港还没有回归中国，所以被单独列了出来。现在重新命名成中国
+datamap_remove$Country[datamap_remove$Country == "Hong Kong"] <- "China"
+#澳门同理
+datamap_remove$Country[datamap_remove$Country == "Macao"] <- "China"
+#Netherlands Antilles 荷属安蒂列斯属于 Caribbean Netherlands 荷兰加勒比地区
+datamap_remove$Country[datamap_remove$Country == "Netherlands Antilles"] <- "Caribbean Netherlands"
+#Saint Martin (French part) 法属圣马丁群岛 算作法国领土
+datamap_remove$Country[datamap_remove$Country == "Saint Martin (French Part)"] <- "French"
+#Tokelau 托克劳属于新西兰领土 New Zealand
+datamap_remove$Country[datamap_remove$Country == "Tokelau"] <- "New Zealand"
+```
+
+
+```{r}
+#创建国家名称变量
+countryN_temp <- countryname(datamap_remove$Country)
+datamap_c <- datamap_remove %>% mutate(countryN = countryN_temp)
+
+##经纬度数据处理
+data_c <- mutate(data_temp,countryname = countryname(data_temp$region))
+
+data_c_match <- data_c[data_c$countryname %in% unique(datamap_c$countryN),]
+
+table(is.na(country_temp))
+```
+
+```{r}
+a <- unique(datamap_c$countryN)
+b <- unique(data_c_match$countryname)
+a[which(!(a %in%b))]
+```
+
+```{r}
+left_join(data_c_match,datamap_c,by=c("countryname" = "countryN"))
+```
+
+
+
+
+
+
+
+
+
+
+
+

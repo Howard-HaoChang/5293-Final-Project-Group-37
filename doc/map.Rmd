@@ -6,11 +6,13 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE,warning = F)
 library(ggplot2)
 library(tidyverse)
 library(maps)
 library(readxl)
+library(gganimate)
+library(gifski)
 ```
 
 
@@ -30,10 +32,46 @@ ggplot(world_map, aes(x = long, y = lat, group = group))+
 ```{r}
 disaster = read_excel('../data/emdat_public_2022_03_19_query_uid-LV4CQy.xlsx', sheet = 1)
 
-disastersum = disaster %>%
+disastersumyear = disaster %>%
   group_by(Country, Year) %>%
-  summarize(totaldeath = sum(Total.Deaths))
+  summarize(totaldeath = sum(`Total Deaths`, na.rm = T))
+
+disastersumall = disaster %>%
+  group_by(Country) %>%
+  summarize(totaldeath = sum(`Total Deaths`, na.rm = T))
 ```
 
 
+## plot data
+```{r}
+sample = data.frame(Country = unique(world_map$region), value = sample(1:200, 252, replace = T))
+
+disasterplotall = world_map %>%
+  left_join(sample, by = c('region' = 'Country'))
+
+ggplot(disasterplotall, aes(x = long, y = lat, group = group))+
+  geom_polygon(aes(fill = value))+
+  theme_classic()
+```
+
+## time series data
+```{r}
+sample = data.frame(Country = unique(world_map$region), value = sample(1:200, 252, replace = T), year = 2001)
+disasterplotsum = world_map %>%
+  left_join(sample, by = c('region' = 'Country'))
+
+for(i in 2002:2020){
+  sample = data.frame(Country = unique(world_map$region), value = sample(1:200, 252, replace = T), year = i)
+  inter = world_map %>% left_join(sample, by = c('region' = 'Country'))
+  disasterplotsum = rbind(disasterplotsum,inter)
+}
+
+g = ggplot(disasterplotsum, aes(x = long, y = lat, group = group))+
+  geom_polygon(aes(fill = value))+
+  transition_manual(frames = year) +
+  ggdark::dark_theme_bw() +
+  labs(title = paste('Year:','{current_frame}'))
+
+animate(g)
+```
 
