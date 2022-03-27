@@ -15,7 +15,7 @@ library(do)
 ```{r}
 getwd()
 #读取数据，作图数据
-datamap <- readxl::read_xlsx("emdat_public_2022_03_19_query_uid-LV4CQy.xlsx")
+datamap <- readxl::read_xlsx("cleared_data.xlsx")
 #读取经纬度数据
 data_temp <- map_data("world")
 ```
@@ -31,14 +31,14 @@ Warning: Problem with `mutate()` column `countrycode`.
 
 第一次匹配，作图数据中存在一些地区名称而非国家名称，需要二次修改，统一成国家
 #统一国家
-"British Virgin Islands"英属维京群岛 英国
-"U.S. Virgin Islands"美属维京群岛 美国
+"British Virgin Islands"英属维京群岛 维京群岛 "Virgin Islands"
+"U.S. Virgin Islands"美属维京群岛 维京群岛 "Virgin Islands"
 "Hong Kong"香港是中国的一部分                       
 "Macao"澳门是中国的一部分
 "Taiwan"台湾是中国的一部分，China(Taiwan) 最后match之前进行修改
-"Netherlands Antilles"荷属安蒂列斯 荷兰加勒比地区 Caribbean Netherlands
-"Saint Martin (French part)" 法属圣马丁群岛
-"Tokelau"托克劳 新西兰的附属领土 新西兰
+"Netherlands Antilles"荷属安蒂列斯 荷兰加勒比地区 Caribbean Netherlands ---> 荷兰Netherlands
+"Saint Martin (French part)" 法属圣马丁群岛 "Saint Martin"
+"Tokelau"托克劳 新西兰的附属领土 新西兰 "New Zealand"
 "Yemen Arab Republic"阿拉伯也门共和国（1962-1990），又称北也门，现已合并为也门共和国 Yemen
 
 #删除
@@ -66,31 +66,29 @@ datamap_remove$Country[datamap_remove$Country == "Azores Islands"] <- "Azores"
 datamap_remove$Country[datamap_remove$Country == "Canary Is"] <- "Canary Islands"
 #因为时间原因，过去的Yemen是两个国家，Yemen P Dem Rep和Yemen Arab Rep。不过在1990之后合并成了一个国家Yemen。经纬数据并没有之前细化的地图划分，所以直接合并替换成Yemen
 datamap_remove$Country[datamap_remove$Country %in% c("Yemen P Dem Rep","Yemen Arab Rep")] <- "Yemen"
-#Virgin Island (British)英属维京群岛，经纬图并没有单独划分，故直接算成英国
-datamap_remove$Country[datamap_remove$Country == "Virgin Island (British)"] <- "UK"
-#Virgin Island (U.S.)美属维京群岛，经纬图并没有单独划分，故直接算成美国
-datamap_remove$Country[datamap_remove$Country == "Virgin Island (U.S.)"] <- "US"
+#Virgin Island (British)英属维京群岛，经纬图并没有单独划分，故直接算成维京群岛"Virgin Islands"
+datamap_remove$Country[datamap_remove$Country == "Virgin Island (British)"] <- "Virgin Islands"
+#Virgin Island (U.S.)美属维京群岛，经纬图并没有单独划分，故直接算成维京群岛"Virgin Islands"
+datamap_remove$Country[datamap_remove$Country == "Virgin Island (U.S.)"] <- "Virgin Islands"
 #当时的香港还没有回归中国，所以被单独列了出来。现在重新命名成中国
 datamap_remove$Country[datamap_remove$Country == "Hong Kong"] <- "China"
 #澳门同理
 datamap_remove$Country[datamap_remove$Country == "Macao"] <- "China"
-#Netherlands Antilles 荷属安蒂列斯属于 Caribbean Netherlands 荷兰加勒比地区
-datamap_remove$Country[datamap_remove$Country == "Netherlands Antilles"] <- "Caribbean Netherlands"
-#Saint Martin (French part) 法属圣马丁群岛 算作法国领土
-datamap_remove$Country[datamap_remove$Country == "Saint Martin (French Part)"] <- "French"
+#Netherlands Antilles 荷属安蒂列斯属于 Caribbean Netherlands 荷兰加勒比地区 但是经纬图没有，故直接算成荷兰 "Netherlands"
+datamap_remove$Country[datamap_remove$Country == "Netherlands Antilles"] <- "Netherlands"
+#Saint Martin (French part) 法属圣马丁群岛 算作圣马丁  "Saint Martin"
+datamap_remove$Country[datamap_remove$Country == "Saint Martin (French Part)"] <- "Saint Martin"
 #Tokelau 托克劳属于新西兰领土 New Zealand
 datamap_remove$Country[datamap_remove$Country == "Tokelau"] <- "New Zealand"
 ```
 
 ```{r}
 #创建国家名称变量
-countryN_temp <- countryname(datamap_remove$Country)
-datamap_c <- datamap_remove %>% mutate(countryN = countryN_temp)
+datamap_match <- datamap_remove %>% mutate(country.name = ifelse(is.na(countryname(datamap_remove$Country)),datamap_remove$Country,countryname(datamap_remove$Country)))
 
 ##经纬度数据处理
-data_c <- mutate(data_temp,countryname = countryname(data_temp$region))
+data_match <- mutate(data_temp,country.name = ifelse(is.na(countryname(data_temp$region)),data_temp$region,countryname(data_temp$region)))
 
-data_c_match <- data_c[data_c$countryname %in% unique(datamap_c$countryN),]
+data_final_match <- data_match[data_match$country.name %in% unique(datamap_match$country.name),]
 
-table(is.na(country_temp))
 ```

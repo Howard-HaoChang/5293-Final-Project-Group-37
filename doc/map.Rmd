@@ -13,65 +13,164 @@ library(maps)
 library(readxl)
 library(gganimate)
 library(gifski)
+library(do)
+library(countrycode)
+library(plotly)
 ```
 
 
+
 ## Read map data
+```{r, warning = F, message = F}
+# input the data
+datamap <- readxl::read_xlsx("../data/cleared_data.xlsx")
+
+# get the map data
+data_temp <- map_data("world")
+```
+
+## data wrangling
+
+第一遍尝试，发现countryname收录数据，我们通过修改将这些名称跳过countryname function直接进行匹配。
+Warning: Problem with `mutate()` column `countrycode`.
+ℹ `countrycode = countryname(datap_temp$Country)`.
+ℹ Some values were not matched unambiguously: Azores Islands, Canary Is, Serbia Montenegro, Yemen P Dem Rep
+
+Warning: Problem with `mutate()` column `countrycode`.
+ℹ `countrycode = countryname(data_temp$region)`.
+ℹ Some values were not matched unambiguously: Ascension Island, Azores, Barbuda, Canary Islands, Chagos Archipelago, Grenadines, Heard Island, Madeira Islands, Micronesia, Saba, Saint Martin, Siachen Glacier, Sint Eustatius, Virgin Islands
+
+第一次匹配，作图数据中存在一些地区名称而非国家名称，需要二次修改，统一成国家
+
+###统一国家
+"British Virgin Islands"英属维京群岛 英国
+"U.S. Virgin Islands"美属维京群岛 美国
+"Hong Kong"香港是中国的一部分                       
+"Macao"澳门是中国的一部分
+"Taiwan"台湾是中国的一部分，China(Taiwan) 最后match之前进行修改
+"Netherlands Antilles"荷属安蒂列斯 荷兰加勒比地区 Caribbean Netherlands
+"Saint Martin (French part)" 法属圣马丁群岛
+"Tokelau"托克劳 新西兰的附属领土 新西兰
+"Yemen Arab Republic"阿拉伯也门共和国（1962-1990），又称北也门，现已合并为也门共和国 Yemen
+
+###删除
+"Micronesia (Federated States of)" 密克罗尼西亚联邦 地图里没有 删掉
+"Tuvalu"图瓦卢 地图里没有 删掉
+
+###解体待定（原始数据处理）
+"Czechoslovakia"捷克斯洛伐克 解体
+保留含有显著死亡人数的数据(两条)，在location中显示为Slovakia地区，故将国家名称变更为“Slovakia”
+"Yugoslavia"南斯拉夫 解体 1963(Earthquake)/1979(Flood)划分成6份命名为现在南斯拉夫解体后的六个国家。
+保留含有显著死亡人数的数据(两条)，在location中有显示各自地区，故将国家名称与地区匹配即可。
+“Serbia Montenegro”塞尔维亚和黑山国家联盟 解体
+在location中有显示各自地区，故将国家名称与地区匹配即可。(2005-7-14地区同时包含了两个国家，但因死亡人数过少，仅三人。故删除)
+
 ```{r}
-world_map = map_data('world')
+##作图数据处理
+#备份数据，读取太费劲了
+datamap_temp <- datamap
+#删除"Micronesia (Federated States of)" 密克罗尼西亚联邦和"Tuvalu"图瓦卢
+datamap_remove <- datamap_temp[-which(datamap_temp$Country %in% c("Micronesia (Federated States of)","Tuvalu")),]
+#替换无法读取的国家名称(修改1)
+#Azores Islands在function countryname中没有结果，故直接替换成和经纬度数据一样的国家名称 Azores 即可
+datamap_remove$Country[datamap_remove$Country == "Azores Islands"] <- "Azores"
+#Canary Is同理，替换成 Canary Islands 即可
+datamap_remove$Country[datamap_remove$Country == "Canary Is"] <- "Canary Islands"
+#因为时间原因，过去的Yemen是两个国家，Yemen P Dem Rep和Yemen Arab Rep。不过在1990之后合并成了一个国家Yemen。经纬数据并没有之前细化的地图划分，所以直接合并替换成Yemen
+datamap_remove$Country[datamap_remove$Country %in% c("Yemen P Dem Rep","Yemen Arab Rep")] <- "Yemen"
+#Virgin Island (British)英属维京群岛，经纬图并没有单独划分，故直接算成维京群岛"Virgin Islands"
+datamap_remove$Country[datamap_remove$Country == "Virgin Island (British)"] <- "Virgin Islands"
+#Virgin Island (U.S.)美属维京群岛，经纬图并没有单独划分，故直接算成维京群岛"Virgin Islands"
+datamap_remove$Country[datamap_remove$Country == "Virgin Island (U.S.)"] <- "Virgin Islands"
+#当时的香港还没有回归中国，所以被单独列了出来。现在重新命名成中国
+datamap_remove$Country[datamap_remove$Country == "Hong Kong"] <- "China"
+#澳门同理
+datamap_remove$Country[datamap_remove$Country == "Macao"] <- "China"
+#Netherlands Antilles 荷属安蒂列斯属于 Caribbean Netherlands 荷兰加勒比地区 但是经纬图没有，故直接算成荷兰 "Netherlands"
+datamap_remove$Country[datamap_remove$Country == "Netherlands Antilles"] <- "Netherlands"
+#Saint Martin (French part) 法属圣马丁群岛 算作圣马丁  "Saint Martin"
+datamap_remove$Country[datamap_remove$Country == "Saint Martin (French Part)"] <- "Saint Martin"
+#Tokelau 托克劳属于新西兰领土 New Zealand
+datamap_remove$Country[datamap_remove$Country == "Tokelau"] <- "New Zealand"
+```
+
+```{r}
+#创建国家名称变量
+datamap_match <- datamap_remove %>% mutate(countryname = ifelse(is.na(countryname(datamap_remove$Country)),datamap_remove$Country,countryname(datamap_remove$Country)))
+
+##经纬度数据处理
+data_match <- mutate(data_temp,countryname = ifelse(is.na(countryname(data_temp$region)),data_temp$region,countryname(data_temp$region)))
+
+data_c_match <- data_match[data_match$countryname %in% unique(datamap_match$countryname),]
+
+
+# data summary
+datamap_raw = datamap_match %>%
+  group_by(Year) %>%
+  mutate(alldeaths = sum(`Total Deaths`, na.rm = T)) %>%
+  group_by(Year,countryname) %>%
+  summarize(deathsprop = sum(`Total Deaths`, na.rm = T)/alldeaths, deaths = sum(`Total Deaths`, na.rm = T)) %>%
+  unique()
+
+datamap_rawall = datamap_match %>%
+  mutate(alldeaths = sum(`Total Deaths`, na.rm = T)) %>%
+  group_by(countryname) %>%
+  summarize(deathsprop = sum(`Total Deaths`, na.rm = T)/alldeaths, deaths = sum(`Total Deaths`, na.rm = T)) %>%
+  unique()
+
+
+country = sort(unique(data_c_match$countryname))
+data = data.frame(Year = as.character(rep(seq(1900,2022), each = length(country))), Country = rep(country, 123))
+data1 = data %>% left_join(datamap_raw, by = c('Country' = 'countryname', 'Year' = 'Year'))
+data1[is.na(data1)] = 0
+
+rawdata = left_join(data_c_match,data1,by=c("countryname" = "Country"))
+rawdata$Year = as.numeric(rawdata$Year)
+
+rawalldata = left_join(data_c_match,datamap_rawall)
 ```
 
 ## plot a basic world map
 ```{r}
-ggplot(world_map, aes(x = long, y = lat, group = group))+
+ggplot(data_temp, aes(x = long, y = lat, group = group))+
   geom_polygon()+
   theme_classic()
 ```
 
-## read data
-```{r}
-disaster = read_excel('../data/emdat_public_2022_03_19_query_uid-LV4CQy.xlsx', sheet = 1)
-
-disastersumyear = disaster %>%
-  group_by(Country, Year) %>%
-  summarize(totaldeath = sum(`Total Deaths`, na.rm = T))
-
-disastersumall = disaster %>%
-  group_by(Country) %>%
-  summarize(totaldeath = sum(`Total Deaths`, na.rm = T))
-```
-
-
 ## plot data
 ```{r}
-sample = data.frame(Country = unique(world_map$region), value = sample(1:200, 252, replace = T))
+plot1data = rawalldata
 
-disasterplotall = world_map %>%
-  left_join(sample, by = c('region' = 'Country'))
+g = ggplot(plot1data, aes(x = long, y = lat, group = group, text = countryname))+
+  geom_polygon(aes(fill = log10(deaths)), color = 'black')+
+  scale_fill_gradient(low = '#FFF68F',high = '#FC4902') +
+  labs(title = 'Total Death Number for Every Country From 1900-2022')+
+  ggdark::dark_theme_bw()
 
-ggplot(disasterplotall, aes(x = long, y = lat, group = group))+
-  geom_polygon(aes(fill = value))+
-  theme_classic()
+ggplotly(g, tooltip = c("text",'fill'))
 ```
 
 ## time series data
 ```{r}
-sample = data.frame(Country = unique(world_map$region), value = sample(1:200, 252, replace = T), year = 2001)
-disasterplotsum = world_map %>%
-  left_join(sample, by = c('region' = 'Country'))
+plot2data = rawdata
 
-for(i in 2002:2020){
-  sample = data.frame(Country = unique(world_map$region), value = sample(1:200, 252, replace = T), year = i)
-  inter = world_map %>% left_join(sample, by = c('region' = 'Country'))
-  disasterplotsum = rbind(disasterplotsum,inter)
-}
+g2 = ggplot(plot2data, aes(x = long, y = lat, group = group))+
+  geom_polygon(aes(fill = log10(deaths)), color = 'black')+
+  transition_manual(frames = Year) +
+  scale_fill_gradient(low = '#FFF68F',high = '#FC4902') +
+  labs(title = paste('Year:','{current_frame}')) +
+  ggdark::dark_theme_bw()
 
-g = ggplot(disasterplotsum, aes(x = long, y = lat, group = group))+
-  geom_polygon(aes(fill = value))+
-  transition_manual(frames = year) +
-  ggdark::dark_theme_bw() +
-  labs(title = paste('Year:','{current_frame}'))
-
-animate(g)
+animate(g2,fps = 3)
 ```
+
+数据处理注意事项：
+1.尽可能保证数据完整性，不要删除过多的缺失数据从而导致数据偏差。
+2.验证数据结构的完整性和单一性，不要出现重复数据。
+3.尽量不要进行大表对大表的连接（除非电脑配置极好或在服务器上进行）。
+
+作图注意事项：
+1.尽量避免用绝对数据进行画图，因为人口，面积等导致国家之间的数据会有很大的绝对差距。为了解决这个问题，通常有两个解决方式：1）可以考虑用比率数据替代绝对数据，如用死亡率代替死亡人数。2）可以考虑进行对数变化以突出数据之间的差距。
+2.如果考虑对数变换，那么一定要考虑0如何处理，作为静默还是作为数据0进行表示
+3.
 
