@@ -9,16 +9,14 @@ library(maps)
 library(ggplot2)
 library(countrycode)
 library(dplyr)
-library(tidyverse)
 library(do)
 ```
 
-
-```{r, warning = F, message = F}
-# input the data
-datamap <- readxl::read_xsx("../data/cleared_data.xlsx")
-
-# get the map data
+```{r}
+getwd()
+#读取数据，作图数据
+datamap <- readxl::read_xlsx("emdat_public_2022_03_19_query_uid-LV4CQy.xlsx")
+#读取经纬度数据
 data_temp <- map_data("world")
 ```
 
@@ -55,7 +53,6 @@ Warning: Problem with `mutate()` column `countrycode`.
 “Serbia Montenegro”塞尔维亚和黑山国家联盟 解体
 在location中有显示各自地区，故将国家名称与地区匹配即可。(2005-7-14地区同时包含了两个国家，但因死亡人数过少，仅三人。故删除)
 
-
 ```{r}
 ##作图数据处理
 #备份数据，读取太费劲了
@@ -85,51 +82,15 @@ datamap_remove$Country[datamap_remove$Country == "Saint Martin (French Part)"] <
 datamap_remove$Country[datamap_remove$Country == "Tokelau"] <- "New Zealand"
 ```
 
-
 ```{r}
 #创建国家名称变量
-countryN_temp <- ifelse(is.na(countryname(datamap_remove$Country)),datamap_remove$Country,countryname(datamap_remove$Country))
+countryN_temp <- countryname(datamap_remove$Country)
 datamap_c <- datamap_remove %>% mutate(countryN = countryN_temp)
 
 ##经纬度数据处理
 data_c <- mutate(data_temp,countryname = countryname(data_temp$region))
 
 data_c_match <- data_c[data_c$countryname %in% unique(datamap_c$countryN),]
+
+table(is.na(country_temp))
 ```
-
-```{r}
-# data summary
-datamap_raw = datamap_c %>%
-  group_by(Year,countryN) %>%
-  summarize(deaths = sum(`Total Deaths`, na.rm = T))
-
-
-country = sort(unique(data_c_match$countryname))
-data = data.frame(Year = as.character(rep(seq(1900,2022), each = length(country))), Country = rep(country, 123))
-data1 = data %>% left_join(datamap_raw, by = c('Country' = 'countryN', 'Year' = 'Year'))
-data1[is.na(data1)] = 0
-
-rawdata = left_join(data_c_match,data1,by=c("countryname" = "Country"))
-rawdata[rawdata$countryname == 'China',]
-
-rawdata$Year = as.numeric(rawdata$Year)
-
-
-test = left_join(data_c_match,data1[data1$Year%in%c('1900'),],by=c("countryname" = "Country"))
-test$deaths[is.na(test$deaths)] = 0
-ggplot(test, aes(x = long, y = lat, group = group))+
-  geom_polygon(aes(fill = deaths))+
-  theme_classic()
-```
-
-
-
-
-
-
-
-
-
-
-
-
