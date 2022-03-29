@@ -1,0 +1,52 @@
+---
+title: "Visualizating Geographic Time Series Data with Messy Country Names"
+author: "Jiachen Liu, Yihui Xie, Hao Chang"
+date: "3/28/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=FALSE)
+```
+
+With the development of internet and acceleration of Internationalization process, many data nowadays are recorded based on countries. To better understand the geographical information contained in these data, a choropleth or geographic heatmap sometimes is unavoidable. Generally, geographic information is required for those maps, but such information does not always in the data when we get our hands on them. This tutorial is intented to solve this problem, helping you adding location information(Longitude and Latitude) to a simple country based data.
+
+In this tutorial, we start with data downloading directly from [**The International Disaster Data Center**](https://public.emdat.be/data), which have the death number of international disasters in the past 122 years and very messy country names. We will use the data to show and guide you through the process of data cleaning, adding location information, and finally produce a geographic heatmap with time change shown by animation.
+
+# Data Reading
+
+```{r}
+# read in the dataset downloaded from the International Disaster Data Center
+raw_data <- readxl::read_xlsx("../data/emdat_public_2022_03_19_query_uid-LV4CQy.xlsx")
+```
+
+```{r}
+head(raw_data)
+```
+Here, we have 50 columns in the data, but we only focus on "Year", "Country", and "Total Deaths" in this tutorial. One thing you might notice is that there actually are "Latitude" and "Longitude" columns in this data, but there are too many NAs in those columns hence not usable.
+
+# Data Processing
+
+Our target in this step is to add location information to the data. A simple way to achieve this is to find an existing dataset containing countries and Latitude/Longitude, and merge our data with that exiting data. This is a good thought, but our data actually recording countries names in a very different way from the existing data(e.g. write "United States of America" as "USA"). This is also a very common situation, and to deal with the problem, we need to clean our countries names first before we can do the merge.
+
+```{r}
+# Read in the existing data from ggplot 2 in "latitude.longtitude.data"
+library(ggplot2)
+latitude.longtitude.data <- map_data("world")
+head(latitude.longtitude.data)
+```
+
+We recommend using this data from ggplot2 to keep maps consistent. Read from above, we know the country column in the existing dataset is "region".
+
+
+# 1. 经纬度
+# 2. 名字符合
+# 
+# 1. 名字不standardize
+# 2. 国家随时间变化
+# 
+# 画图
+# 1. 强调一下取log的必要性
+# 2. 0 会变成NA
+
+
